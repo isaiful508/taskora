@@ -18,6 +18,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -414,6 +415,11 @@ export function ReviewDashboard() {
                             <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-medium text-red-800 dark:bg-red-500/15 dark:text-red-300">
                               Late
                             </span>
+                          ) : null}
+                          {submission.previousSubmissionId ? (
+                            <Badge variant="secondary" title="Student resubmitted after a revision request">
+                              Resubmitted
+                            </Badge>
                           ) : null}
                         </div>
                         <p className="mt-1 line-clamp-2 max-w-md text-xs text-muted-foreground">

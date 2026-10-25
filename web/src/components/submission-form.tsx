@@ -3,6 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Send } from "lucide-react";
+import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -12,13 +13,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { api, ApiError } from "@/lib/api";
+import type { Submission } from "@/lib/types";
 import { submissionFormSchema, type SubmissionFormValues } from "@/lib/validation";
 
 interface SubmissionFormProps {
   lockedReason?: string | null;
+  revision?: Submission | null;
 }
 
-export function SubmissionForm({ lockedReason = null }: SubmissionFormProps) {
+export function SubmissionForm({ lockedReason = null, revision = null }: SubmissionFormProps) {
   const queryClient = useQueryClient();
 
   const {
@@ -32,13 +35,28 @@ export function SubmissionForm({ lockedReason = null }: SubmissionFormProps) {
     defaultValues: { projectName: "", repoUrl: "", liveUrl: "", description: "" },
   });
 
+  useEffect(() => {
+    if (revision) {
+      reset({
+        projectName: revision.projectName,
+        repoUrl: revision.repoUrl,
+        liveUrl: revision.liveUrl ?? "",
+        description: revision.description,
+      });
+    }
+  }, [revision, reset]);
+
   const mutation = useMutation({
     mutationFn: api.submissions.create,
     onSuccess: () => {
-      toast.success("Project submitted", {
-        description: "A mentor will review it shortly.",
+      toast.success(revision ? "Project resubmitted" : "Project submitted", {
+        description: revision
+          ? "Your updated project has been sent to the mentor for another review."
+          : "A mentor will review it shortly.",
       });
-      reset();
+      if (!revision) {
+        reset({ projectName: "", repoUrl: "", liveUrl: "", description: "" });
+      }
       void queryClient.invalidateQueries({ queryKey: ["my-submissions"] });
       void queryClient.invalidateQueries({ queryKey: ["stats"] });
     },
@@ -68,12 +86,13 @@ export function SubmissionForm({ lockedReason = null }: SubmissionFormProps) {
   const isLocked = Boolean(lockedReason);
 
   return (
-    <Card>
+    <Card id="submission-form">
       <CardHeader>
-        <CardTitle>Submit a project</CardTitle>
+        <CardTitle>{revision ? "Update and resubmit your project" : "Submit a project"}</CardTitle>
         <CardDescription>
-          Share the repository, a live deployment (if you have one) and a short description of
-          what you built.
+          {revision
+            ? "Your previous project details are filled in. Update the links or description to reflect your fixes, then resubmit."
+            : "Share the repository, a live deployment (if you have one) and a short description of what you built."}
         </CardDescription>
       </CardHeader>
 
@@ -165,7 +184,13 @@ export function SubmissionForm({ lockedReason = null }: SubmissionFormProps) {
             ) : (
               <Send className="size-4" />
             )}
-            {mutation.isPending ? "Submitting…" : "Submit project"}
+            {mutation.isPending
+              ? revision
+                ? "Resubmitting…"
+                : "Submitting…"
+              : revision
+                ? "Resubmit updated project"
+                : "Submit project"}
           </Button>
         </form>
       </CardContent>

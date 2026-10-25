@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { BadgeCheck, Clock3, Layers3, Sparkles } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 import { FullPageLoader } from "@/components/full-page-loader";
 import { MySubmissions } from "@/components/my-submissions";
 import { SubmissionForm } from "@/components/submission-form";
@@ -140,16 +141,28 @@ export default function StudentDashboardPage() {
       {revisionRequested ? (
         <Alert>
           <AlertTitle>Revision requested — update and resubmit</AlertTitle>
-          <AlertDescription>
-            A mentor left feedback on “{revisionRequested.projectName}”. Review the feedback in your
-            submission history, then submit the updated version below.
+          <AlertDescription className="flex flex-wrap items-center justify-between gap-3">
+            <span>
+              A mentor left feedback on “{revisionRequested.projectName}”. The project details are
+              prefilled below; edit the fields you changed and resubmit.
+            </span>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() =>
+                document.getElementById("submission-form")?.scrollIntoView({ behavior: "smooth" })
+              }
+            >
+              Update and resubmit
+            </Button>
           </AlertDescription>
         </Alert>
       ) : null}
 
       <div className="grid gap-6 lg:grid-cols-5">
         <div className="lg:col-span-3">
-          <SubmissionForm lockedReason={lockedReason} />
+          <SubmissionForm lockedReason={lockedReason} revision={revisionRequested} />
         </div>
         <div className="lg:col-span-2">
           {isPending ? (
