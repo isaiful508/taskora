@@ -38,6 +38,9 @@ JWT_SECRET="replace-with-a-long-random-string"
 JWT_EXPIRES_IN="7d"
 CORS_ORIGIN="http://localhost:3000"
 NODE_ENV=development
+MENTOR_EMAIL="mentor@example.com"
+MENTOR_PASSWORD="use-a-unique-random-password-of-at-least-12-characters"
+STUDENT_DEMO_PASSWORD="use-a-different-unique-password-of-at-least-12-characters"
 ```
 
 `web/.env`:
@@ -48,6 +51,8 @@ NEXT_PUBLIC_API_URL="http://localhost:4000"
 
 > The browser calls the API directly (not through a Next.js proxy), so `CORS_ORIGIN` must match the
 > web origin exactly and the API must be started with `credentials: "include"` support (it is).
+> The seed requires unique mentor and student demo passwords from `server/.env`. Never commit the
+> populated `.env` file or reuse these credentials for a deployed database.
 
 ### 4. Create the database and seed it
 
@@ -57,8 +62,9 @@ npm run db:setup
 ```
 
 `db:setup` runs `prisma migrate deploy` (creating the tables and the partial unique index that
-prevents duplicate submissions) followed by `prisma/seed.ts`, which inserts 1 mentor, 16 students
-and 18 submissions.
+prevents duplicate submissions) followed by `prisma/seed.ts`, which resets the database and inserts
+1 mentor, 16 students and 18 submissions. Use it only for a local/demo database; do not run the seed
+against a database containing real user data.
 
 ### 5. Run both apps
 
@@ -86,11 +92,18 @@ npm run build
 
 | Role   | Email                  | Password       |
 | ------ | ---------------------- | -------------- |
-| Mentor | `mentor@assessment.dev`| `Mentor@123`   |
-| Student| `<slug>@student.dev`   | `Student@123`  |
+| Mentor | Value of `MENTOR_EMAIL` | Value of `MENTOR_PASSWORD` |
+| Student| `<slug>@student.dev`   | Value of `STUDENT_DEMO_PASSWORD` |
 
-The seed prints the mentor credentials and the number of seeded accounts. Example students:
+The seed prints the mentor email and number of seeded accounts, but never prints passwords. Example students:
 `ayesha.rahman@student.dev`, `tanvir.hasan@student.dev`, …
+
+### Repository visibility requirement
+
+Keep the GitHub repository private until the submission deadline. After the deadline, change the
+repository visibility to public and verify that an unauthenticated browser can open the repository
+and that `git ls-remote https://github.com/<owner>/<repo>.git` succeeds. Do not include populated
+environment files, production credentials, or database backups when making the repository public.
 
 ---
 
@@ -258,7 +271,7 @@ The brief left a few things open; these are the interpretations that were implem
 
 ```bash
 npm run dev            # run API + web together
-npm run build          # build both
+npm run build          # typecheck the API and build the web app
 npm run db:setup       # migrate + seed
 npm run db:studio      # Prisma Studio
 npm run dev --prefix server
@@ -276,8 +289,9 @@ rate limiting — 47 assertions.
 
 ```bash
 npm run dev --prefix server      # the API must be running
-bash scripts/api-tests.sh
+MENTOR_EMAIL=mentor@example.com MENTOR_PASSWORD='your-seeded-mentor-password' bash scripts/api-tests.sh
 ```
 
 > The auth rate limiter allows 20 auth requests per IP per 15 minutes, so restart the API between
-> back-to-back runs or the signup/login steps will return `429`.
+> back-to-back runs or the signup/login steps will return `429`. The root `npm run build` typechecks
+> the API and creates the Next.js production build; the API currently runs from TypeScript with `tsx`.

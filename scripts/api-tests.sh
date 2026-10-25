@@ -8,6 +8,10 @@
 # the signup/login steps fail with 429.
 set -u
 API="${1:-http://localhost:4000}"
+if [ -z "${MENTOR_EMAIL:-}" ] || [ -z "${MENTOR_PASSWORD:-}" ]; then
+  echo "Set MENTOR_EMAIL and MENTOR_PASSWORD to the seeded mentor credentials." >&2
+  exit 1
+fi
 PASS=0
 FAIL=0
 JAR="$(mktemp)"
@@ -26,6 +30,15 @@ check() { # check <label> <expected-status> <actual-status>
 
 status() { curl -s -o /dev/null -w '%{http_code}' "$@"; }
 body() { curl -s "$@"; }
+json_escape() {
+  local value="$1"
+  value=${value//\\/\\\\}
+  value=${value//\"/\\\"}
+  printf '%s' "$value"
+}
+
+MENTOR_EMAIL_JSON=$(json_escape "$MENTOR_EMAIL")
+MENTOR_PASSWORD_JSON=$(json_escape "$MENTOR_PASSWORD")
 
 echo "=== 1. Health ==="
 check "GET /api/health" 200 "$(status $API/api/health)"
@@ -38,11 +51,11 @@ check "GET /api/submissions (no token)" 401 "$(status $API/api/submissions)"
 
 echo
 echo "=== 3. Mentor login ==="
-LOGIN=$(body -c "$JAR" -X POST $API/api/auth/login -H 'Content-Type: application/json' \
-  -d '{"email":"mentor@assessment.dev","password":"Mentor@123"}')
-check "POST /api/auth/login (valid)" 200 "$(status -c "$JAR" -o /dev/null -X POST $API/api/auth/login -H 'Content-Type: application/json' -d '{"email":"mentor@assessment.dev","password":"Mentor@123"}')"
+LOGIN=$(body -c "$JAR" -X POST "$API/api/auth/login" -H 'Content-Type: application/json' \
+  -d "{\"email\":\"$MENTOR_EMAIL_JSON\",\"password\":\"$MENTOR_PASSWORD_JSON\"}")
+check "POST /api/auth/login (valid)" 200 "$(status -c "$JAR" -o /dev/null -X POST "$API/api/auth/login" -H 'Content-Type: application/json' -d "{\"email\":\"$MENTOR_EMAIL_JSON\",\"password\":\"$MENTOR_PASSWORD_JSON\"}")"
 echo "$LOGIN" | grep -q '"role":"MENTOR"' && { PASS=$((PASS+1)); echo "  PASS  login returns MENTOR role"; } || { FAIL=$((FAIL+1)); echo "  FAIL  login role: $LOGIN"; }
-check "POST /api/auth/login (bad password)" 401 "$(status -X POST $API/api/auth/login -H 'Content-Type: application/json' -d '{"email":"mentor@assessment.dev","password":"wrong-password"}')"
+check "POST /api/auth/login (bad password)" 401 "$(status -X POST "$API/api/auth/login" -H 'Content-Type: application/json' -d "{\"email\":\"$MENTOR_EMAIL_JSON\",\"password\":\"wrong-password\"}")"
 check "POST /api/auth/login (unknown email)" 401 "$(status -X POST $API/api/auth/login -H 'Content-Type: application/json' -d '{"email":"nobody@example.com","password":"whatever1"}')"
 check "GET /api/auth/me (mentor)" 200 "$(status -b "$JAR" $API/api/auth/me)"
 

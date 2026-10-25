@@ -6,10 +6,25 @@ import { PrismaClient } from "../generated/prisma/client";
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
 
+function requiredSeedValue(name: string, value: string | undefined, minLength = 1): string {
+  if (!value || value.trim().length < minLength) {
+    throw new Error(`Set ${name} to a value with at least ${minLength} characters before seeding.`);
+  }
+  return value;
+}
+
+const mentorEmail = requiredSeedValue("MENTOR_EMAIL", process.env.MENTOR_EMAIL).trim();
+const mentorPassword = requiredSeedValue("MENTOR_PASSWORD", process.env.MENTOR_PASSWORD, 12);
+const studentDemoPassword = requiredSeedValue(
+  "STUDENT_DEMO_PASSWORD",
+  process.env.STUDENT_DEMO_PASSWORD,
+  12,
+);
+
 const MENTOR = {
   name: "Admin Mentor",
-  email: "mentor@assessment.dev",
-  password: "Mentor@123",
+  email: mentorEmail,
+  password: mentorPassword,
   role: "MENTOR" as const,
 };
 
@@ -198,7 +213,7 @@ async function main() {
     data: { name: MENTOR.name, email: MENTOR.email, passwordHash: mentorHash, role: MENTOR.role },
   });
 
-  const passwordHash = await bcrypt.hash("Student@123", 12);
+  const passwordHash = await bcrypt.hash(studentDemoPassword, 12);
   const students = [];
   for (let i = 0; i < STUDENTS.length; i++) {
     const slug = STUDENTS[i].toLowerCase().replace(/[^a-z]+/g, ".");
@@ -249,8 +264,8 @@ async function main() {
   }
 
   console.log("✅ Seed complete");
-  console.log(`   Mentor:  ${MENTOR.email} / ${MENTOR.password}`);
-  console.log(`   Students: ${students.length} accounts, all with password Student@123`);
+  console.log(`   Mentor:  ${MENTOR.email}`);
+  console.log(`   Students: ${students.length} accounts (password from STUDENT_DEMO_PASSWORD)`);
   console.log(`   Submissions: ${SUBMISSIONS.length + HISTORY.length}`);
 }
 

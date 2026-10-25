@@ -2,6 +2,8 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { CheckCircle2, Clock, Inbox, XCircle } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api } from "@/lib/api";
@@ -38,7 +40,7 @@ const STAT_CARDS = [
 ] as const;
 
 export function StatsCards() {
-  const { data, isPending } = useQuery({
+  const { data, isPending, isError, refetch } = useQuery({
     queryKey: ["stats"],
     queryFn: api.submissions.stats,
   });
@@ -46,33 +48,46 @@ export function StatsCards() {
   const stats = data?.stats;
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-      {STAT_CARDS.map((card) => {
-        const Icon = card.icon;
-        return (
-          <Card key={card.key} size="sm" className={`ring-1 ${card.ringClass}`}>
-            <CardContent className="flex items-center justify-between gap-3">
-              <div className="space-y-1">
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  {card.label}
-                </p>
-                {isPending ? (
-                  <Skeleton className="h-7 w-12" />
-                ) : (
-                  <p className="text-2xl font-semibold tabular-nums">
-                    {stats ? stats[card.key] : 0}
+    <>
+      {isError ? (
+        <Alert variant="destructive">
+          <AlertTitle>Could not load statistics</AlertTitle>
+          <AlertDescription className="flex flex-wrap items-center justify-between gap-3">
+            <span>Please check your connection and try again.</span>
+            <Button size="sm" variant="outline" onClick={() => void refetch()}>
+              Retry
+            </Button>
+          </AlertDescription>
+        </Alert>
+      ) : null}
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {STAT_CARDS.map((card) => {
+          const Icon = card.icon;
+          return (
+            <Card key={card.key} size="sm" className={`ring-1 ${card.ringClass}`}>
+              <CardContent className="flex items-center justify-between gap-3">
+                <div className="space-y-1">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    {card.label}
                   </p>
-                )}
-              </div>
-              <span
-                className={`grid size-9 place-items-center rounded-lg bg-muted ${card.className}`}
-              >
-                <Icon className="size-4.5" aria-hidden />
-              </span>
-            </CardContent>
-          </Card>
-        );
-      })}
-    </div>
+                  {isPending ? (
+                    <Skeleton className="h-7 w-12" />
+                  ) : (
+                    <p className="text-2xl font-semibold tabular-nums">
+                      {stats ? stats[card.key] : "—"}
+                    </p>
+                  )}
+                </div>
+                <span
+                  className={`grid size-9 place-items-center rounded-lg bg-muted ${card.className}`}
+                >
+                  <Icon className="size-4.5" aria-hidden />
+                </span>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+    </>
   );
 }

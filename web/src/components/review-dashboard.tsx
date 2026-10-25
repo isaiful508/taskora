@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, ClipboardCheck, FolderGit2, Globe, Search, Sparkles, X } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { StatsCards } from "@/components/stats-cards";
 import { StatusBadge } from "@/components/status-badge";
 import { TablePagination } from "@/components/table-pagination";
@@ -256,6 +257,21 @@ export function ReviewDashboard() {
           </div>
 
           <div className="rounded-lg border">
+            {submissionsQuery.isError ? (
+              <Alert variant="destructive" className="m-3">
+                <AlertTitle>Could not load submissions</AlertTitle>
+                <AlertDescription className="flex flex-wrap items-center justify-between gap-3">
+                  <span>Please check your connection and try again.</span>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => void submissionsQuery.refetch()}
+                  >
+                    Retry
+                  </Button>
+                </AlertDescription>
+              </Alert>
+            ) : null}
             <Table>
               <TableHeader>
                 <TableRow>
@@ -276,6 +292,12 @@ export function ReviewDashboard() {
                       </TableCell>
                     </TableRow>
                   ))
+                ) : rows.length === 0 && submissionsQuery.isError ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="h-20 text-center text-muted-foreground">
+                      Submission data is unavailable.
+                    </TableCell>
+                  </TableRow>
                 ) : rows.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={6} className="h-32 text-center text-muted-foreground">
