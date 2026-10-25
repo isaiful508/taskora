@@ -1,8 +1,11 @@
 import type {
   Paginated,
   Submission,
+  SubmissionConfig,
   SubmissionFilters,
   SubmissionStats,
+  MentorWorkload,
+  ReviewInput,
   User,
 } from "./types";
 
@@ -72,6 +75,7 @@ export const api = {
     me: () => request<{ user: User }>("/auth/me"),
   },
   submissions: {
+    config: () => request<SubmissionConfig>("/submissions/config"),
     create: (input: {
       projectName: string;
       repoUrl: string;
@@ -85,15 +89,22 @@ export const api = {
           status: filters.status,
           search: filters.search,
           sort: filters.sort,
+          assigned: filters.assigned,
           page: filters.page,
           limit: filters.limit,
         },
       }),
     stats: () => request<{ stats: SubmissionStats }>("/submissions/stats"),
-    updateStatus: (id: string, status: "APPROVED" | "REJECTED") =>
+    mentors: () => request<{ mentors: MentorWorkload[] }>("/submissions/mentors"),
+    updateStatus: (id: string, review: ReviewInput) =>
       request<{ submission: Submission }>(`/submissions/${id}/status`, {
         method: "PATCH",
-        body: { status },
+        body: review,
+      }),
+    assign: (id: string, mentorId: string | null) =>
+      request<{ submission: Submission }>(`/submissions/${id}/assignment`, {
+        method: "PATCH",
+        body: { mentorId },
       }),
   },
 };

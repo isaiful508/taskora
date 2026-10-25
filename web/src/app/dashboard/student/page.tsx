@@ -2,8 +2,9 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { BadgeCheck, Clock3, Layers3, Sparkles } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { FullPageLoader } from "@/components/full-page-loader";
 import { MySubmissions } from "@/components/my-submissions";
 import { SubmissionForm } from "@/components/submission-form";
@@ -13,11 +14,20 @@ import { useAuth } from "@/lib/auth-provider";
 export default function StudentDashboardPage() {
   const { user, status } = useAuth();
   const router = useRouter();
+  const [now, setNow] = useState<number | null>(null);
 
   const { data, isPending } = useQuery({
     queryKey: ["my-submissions"],
     queryFn: api.submissions.mine,
     enabled: status === "authenticated",
+  });
+  const {
+    data: submissionConfig,
+    isError: submissionConfigError,
+    refetch: refetchSubmissionConfig,
+  } = useQuery({
+    queryKey: ["submission-config"],
+    queryFn: api.submissions.config,
   });
 
   useEffect(() => {
@@ -26,18 +36,36 @@ export default function StudentDashboardPage() {
     }
   }, [status, user, router]);
 
+  useEffect(() => {
+    const initialUpdate = window.setTimeout(() => setNow(Date.now()), 0);
+    const interval = window.setInterval(() => setNow(Date.now()), 30_000);
+    return () => {
+      window.clearTimeout(initialUpdate);
+      window.clearInterval(interval);
+    };
+  }, []);
+
   if (status !== "authenticated" || !user) {
     return <FullPageLoader label="Loading your dashboard" />;
   }
 
   const submissions = data?.submissions ?? [];
   const active = submissions.find((s) => s.status === "PENDING" || s.status === "APPROVED");
+  const revisionRequested = submissions.find(
+    (submission) =>
+      submission.status === "NEEDS_REVISION" &&
+      !submissions.some((candidate) => candidate.previousSubmissionId === submission.id),
+  );
+  const deadline = submissionConfig?.deadline ? new Date(submissionConfig.deadline) : null;
+  const deadlinePassed = deadline !== null && now !== null && now > deadline.getTime();
 
   const lockedReason = active
     ? active.status === "PENDING"
       ? "You already have a project awaiting review. You can submit a new one once it is approved or rejected."
       : "One of your projects was approved, so no further submissions are needed."
-    : null;
+    : deadlinePassed && !submissionConfig?.allowLateSubmissions
+      ? "The submission deadline has passed. New submissions are closed."
+      : null;
 
   return (
     <div className="space-y-6">
@@ -75,6 +103,49 @@ export default function StudentDashboardPage() {
           </div>
         </div>
       </section>
+
+      {submissionConfigError ? (
+        <Alert variant="destructive">
+          <AlertTitle>Could not load the submission deadline</AlertTitle>
+          <AlertDescription className="flex flex-wrap items-center justify-between gap-3">
+            <span>Deadline information is unavailable. The server still enforces its submission policy.</span>
+            <button
+              type="button"
+              className="font-medium underline underline-offset-4"
+              onClick={() => void refetchSubmissionConfig()}
+            >
+              Retry
+            </button>
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
+      {submissionConfig?.deadline ? (
+        <Alert variant={deadlinePassed ? "destructive" : "default"}>
+          <AlertTitle>{deadlinePassed ? "Submission deadline passed" : "Submission deadline"}</AlertTitle>
+          <AlertDescription>
+            {deadline?.toLocaleString(undefined, {
+              dateStyle: "medium",
+              timeStyle: "short",
+            })}
+            {deadlinePassed && submissionConfig.allowLateSubmissions
+              ? " — late submissions are still accepted and will be marked late."
+              : deadlinePassed
+                ? " — submissions are now closed."
+                : " — submit before this time to avoid a late label."}
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
+      {revisionRequested ? (
+        <Alert>
+          <AlertTitle>Revision requested — update and resubmit</AlertTitle>
+          <AlertDescription>
+            A mentor left feedback on “{revisionRequested.projectName}”. Review the feedback in your
+            submission history, then submit the updated version below.
+          </AlertDescription>
+        </Alert>
+      ) : null}
 
       <div className="grid gap-6 lg:grid-cols-5">
         <div className="lg:col-span-3">

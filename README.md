@@ -41,6 +41,9 @@ NODE_ENV=development
 MENTOR_EMAIL="mentor@example.com"
 MENTOR_PASSWORD="use-a-unique-random-password-of-at-least-12-characters"
 STUDENT_DEMO_PASSWORD="use-a-different-unique-password-of-at-least-12-characters"
+# Optional ISO-8601 deadline including timezone. Omit for no deadline.
+# SUBMISSION_DEADLINE="2026-12-31T23:59:59+06:00"
+ALLOW_LATE_SUBMISSIONS=true
 ```
 
 `web/.env`:
@@ -124,7 +127,7 @@ project-submission-dashboard/
 │       ├── middleware/         requireAuth / requireRole, rate limiting, validation, error handling
 │       └── modules/
 │           ├── auth/           signup, login, logout, me
-│           └── submissions/    create, list, stats, mine, approve/reject
+│           └── submissions/    create, list, stats, mine, review, assign, deadline config
 └── web/                        Next.js 16 App Router frontend
     └── src/
         ├── app/                Route segments: /, /login, /signup, /dashboard/*
@@ -137,7 +140,7 @@ project-submission-dashboard/
 
 ```prisma
 enum Role { STUDENT MENTOR }
-enum SubmissionStatus { PENDING APPROVED REJECTED }
+enum SubmissionStatus { PENDING APPROVED REJECTED NEEDS_REVISION }
 
 model User {
   id           String   @id @default(cuid())
@@ -147,6 +150,7 @@ model User {
   role         Role     @default(STUDENT)
   createdAt    DateTime @default(now())
   submissions  Submission[]
+  assignedSubmissions Submission[] @relation("MentorAssignments")
 }
 
 model Submission {
@@ -158,6 +162,14 @@ model Submission {
   liveUrl     String?
   description String
   status      SubmissionStatus @default(PENDING)
+  reviewFeedback String?
+  functionalityScore Int?
+  codeQualityScore Int?
+  documentationScore Int?
+  presentationScore Int?
+  isLate Boolean @default(false)
+  assignedMentorId String?
+  previousSubmissionId String? @unique
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
 }
@@ -173,23 +185,27 @@ All endpoints are prefixed with `/api`. Authentication uses a `token` httpOnly c
 | Method | Path                        | Access  | Description |
 | ------ | --------------------------- | ------- | ----------- |
 | GET    | `/api/health`               | public  | Liveness check |
+| GET    | `/api/submissions/config`   | public  | Configured deadline and late-submission policy |
 | POST   | `/api/auth/signup`          | public  | Create a student account, sets the auth cookie |
 | POST   | `/api/auth/login`           | public  | Sign in, sets the auth cookie |
 | POST   | `/api/auth/logout`          | public  | Clear the auth cookie |
 | GET    | `/api/auth/me`              | student or mentor | Current session user |
 | POST   | `/api/submissions`          | student | Create a submission (validated, rate limited) |
 | GET    | `/api/submissions/mine`     | student | The signed-in student's submissions |
-| GET    | `/api/submissions`          | mentor  | List submissions — `status`, `search`, `sort`, `page`, `limit` |
-| GET    | `/api/submissions/stats`    | mentor  | Total / pending / approved / rejected counters |
-| PATCH  | `/api/submissions/:id/status` | mentor | Approve or reject a submission |
+| GET    | `/api/submissions`          | mentor  | List submissions — status, search, assignment filter, sort, page, limit |
+| GET    | `/api/submissions/stats`    | mentor  | Submission counters by status |
+| GET    | `/api/submissions/mentors`  | mentor  | Mentor list with assigned and pending workload counts |
+| PATCH  | `/api/submissions/:id/status` | mentor | Approve, reject, or request revisions with feedback and rubric scores |
+| PATCH  | `/api/submissions/:id/assignment` | mentor | Assign to a mentor or clear the assignment |
 
 ### Query parameters for `GET /api/submissions`
 
 | Param    | Values                          | Default | Notes |
 | -------- | ------------------------------- | ------- | ----- |
-| `status` | `PENDING` \| `APPROVED` \| `REJECTED` | all | Server-side filter |
+| `status` | `PENDING` \| `APPROVED` \| `REJECTED` \| `NEEDS_REVISION` | all | Server-side filter |
 | `search` | free text (≤ 100 chars)         | –       | Case-insensitive match on project name, student name or email |
 | `sort`   | `newest` \| `oldest` \| `name`  | `newest`| Server-side ordering |
+| `assigned` | `all` \| `mine` \| `unassigned` | `all` | Server-side assignment filter |
 | `page`   | integer ≥ 1                     | `1`     | |
 | `limit`  | integer 1–50                    | `10`    | |
 
@@ -214,7 +230,7 @@ role violations `403`, duplicates `409`, missing records `404`, and rate-limit e
 | `/login`, `/signup`   | Auth pages (redirect away when already authenticated) |
 | `/dashboard`          | Role-based redirect |
 | `/dashboard/student`  | Submission form + submission history |
-| `/dashboard/mentor`   | Review dashboard: stats, filters, search, pagination, approve/reject |
+| `/dashboard/mentor`   | Review dashboard: stats, mentor workload, assignments, rubric decisions |
 | `/dashboard/profile`  | Current user profile |
 
 Key implementation details:
@@ -244,15 +260,15 @@ The brief left a few things open; these are the interpretations that were implem
    (`Submission_studentId_active_key` on `studentId` where `status IN ('PENDING','APPROVED')`), so
    concurrent requests cannot both win. The API returns `409` with a friendly message, and the UI
    locks the form and shows *"Submission limit reached"*.
-2. **Only mentors can approve/reject**, and only mentors can list all submissions or read the stats.
+2. **Only mentors can review submissions or manage assignments**, and only mentors can list all
+   submissions or read the stats.
    Students can only ever read their own submissions (`GET /api/submissions/mine`).
-3. **Mentors move a submission between `APPROVED` and `REJECTED`.** The API accepts exactly those two
-   values for `PATCH /api/submissions/:id/status`; anything else is a `400`. There is no "send back to
-   pending" action.
+3. **Mentor decisions are `APPROVED`, `REJECTED`, or `NEEDS_REVISION`.** Each decision requires all
+   four rubric scores (1–5); rejection and revision requests also require written feedback.
 4. **`liveUrl` is optional**, `repoUrl` and `description` are required. Both URLs are validated as
    real URLs.
-5. **Review feedback is not modelled.** The brief only asked for approve/reject, so the status enum
-   carries no feedback column; the mentor dashboard shows the submission details inline.
+5. **Revision requests preserve history.** The student submits a new version linked to the reviewed
+   one; the previous feedback and rubric scores remain visible in their submission history.
 6. **Sorting and filtering happen on the server**, never on the fetched page, so pagination totals
    stay correct.
 7. **Rate limits** — 20 auth requests / 15 min and 5 submissions / 15 min, keyed by user id for
@@ -264,6 +280,12 @@ The brief left a few things open; these are the interpretations that were implem
    are provisioned by seeding or directly in the database.
 10. **CORS is locked to a single origin** (`CORS_ORIGIN`) with credentials enabled, and the auth
     cookie is httpOnly, so the JWT is never exposed to JavaScript.
+11. **Deadline behavior is configurable.** Set `SUBMISSION_DEADLINE` to an ISO-8601 timestamp that
+    includes a timezone. Late submissions are accepted and marked by default; set
+    `ALLOW_LATE_SUBMISSIONS=false` to reject submissions after the configured deadline. If the
+    deadline is unset, submissions remain open.
+12. **Mentor assignment is optional.** Mentors can assign submissions to any seeded mentor, filter
+    their own/unassigned queues, and see assigned and pending workload totals.
 
 ---
 
@@ -283,9 +305,9 @@ cd web && npm run lint && npx tsc --noEmit
 ## Testing
 
 `scripts/api-tests.sh` is a dependency-free (bash + curl) API test suite covering health, the auth
-guards, mentor listing with status/search/sort/pagination, the stats endpoint, signup validation,
-student/mentor RBAC, submission creation and duplicate prevention, approve/reject, error codes and
-rate limiting — 47 assertions.
+guards, status/search/sort/assignment filters and pagination, mentor workload, signup validation,
+student/mentor RBAC, submission creation and duplicate prevention, rubric reviews, revision linking,
+assignment, error codes and rate limiting.
 
 ```bash
 npm run dev --prefix server      # the API must be running

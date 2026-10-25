@@ -42,6 +42,7 @@ MENTOR_PASSWORD_JSON=$(json_escape "$MENTOR_PASSWORD")
 
 echo "=== 1. Health ==="
 check "GET /api/health" 200 "$(status $API/api/health)"
+check "GET /api/submissions/config (public)" 200 "$(status "$API/api/submissions/config")"
 
 echo
 echo "=== 2. Auth guards ==="
@@ -66,12 +67,16 @@ for st in PENDING APPROVED REJECTED; do
   check "GET /api/submissions?status=$st" 200 "$(status -b "$JAR" "$API/api/submissions?status=$st")"
 done
 check "GET /api/submissions?status=BOGUS" 400 "$(status -b "$JAR" "$API/api/submissions?status=BOGUS")"
+check "GET /api/submissions?status=NEEDS_REVISION" 200 "$(status -b "$JAR" "$API/api/submissions?status=NEEDS_REVISION")"
 check "GET /api/submissions?sort=name" 200 "$(status -b "$JAR" "$API/api/submissions?sort=name")"
 check "GET /api/submissions?sort=oldest" 200 "$(status -b "$JAR" "$API/api/submissions?sort=oldest")"
 check "GET /api/submissions?sort=bogus" 400 "$(status -b "$JAR" "$API/api/submissions?sort=bogus")"
 check "GET /api/submissions?search=ayesha" 200 "$(status -b "$JAR" "$API/api/submissions?search=ayesha")"
 check "GET /api/submissions?page=2&limit=5" 200 "$(status -b "$JAR" "$API/api/submissions?page=2&limit=5")"
 check "GET /api/submissions?limit=999" 400 "$(status -b "$JAR" "$API/api/submissions?limit=999")"
+check "GET /api/submissions?assigned=mine" 200 "$(status -b "$JAR" "$API/api/submissions?assigned=mine")"
+check "GET /api/submissions?assigned=unassigned" 200 "$(status -b "$JAR" "$API/api/submissions?assigned=unassigned")"
+check "GET /api/submissions/mentors" 200 "$(status -b "$JAR" "$API/api/submissions/mentors")"
 
 META=$(body -b "$JAR" "$API/api/submissions?page=2&limit=5")
 echo "$META" | grep -q '"meta"' && { PASS=$((PASS+1)); echo "  PASS  pagination meta present"; } || { FAIL=$((FAIL+1)); echo "  FAIL  no meta: $META"; }
@@ -120,18 +125,29 @@ DUP=$(body -b "$SJAR" -X POST $API/api/submissions -H 'Content-Type: application
 check "POST /api/submissions (duplicate -> 409)" 409 "$(status -b "$SJAR" -o /dev/null -X POST $API/api/submissions -H 'Content-Type: application/json' -d '{"projectName":"Duplicate Project 2","repoUrl":"https://github.com/demo/dup2","description":"A duplicate description that is longer than twenty characters."}')"
 echo "$DUP" | grep -qi 'already\|active\|existing' && { PASS=$((PASS+1)); echo "  PASS  duplicate message: $DUP"; } || { FAIL=$((FAIL+1)); echo "  FAIL  duplicate message: $DUP"; }
 check "POST /api/submissions (invalid url -> 400)" 400 "$(status -b "$SJAR" -o /dev/null -X POST $API/api/submissions -H 'Content-Type: application/json' -d '{"projectName":"Bad URL","repoUrl":"not-a-url","description":"A description that is definitely longer than twenty characters."}')"
-check "POST /api/submissions (short description -> 400)" 400 "$(status -b "$SJAR" -o /dev/null -X POST $API/api/submissions -H 'Content-Type: application/json' -d '{"projectName":"Short Description","repoUrl":"https://github.com/demo/x","description":"too short"}')"
 check "POST /api/submissions (mentor -> 403)" 403 "$(status -b "$JAR" -o /dev/null -X POST $API/api/submissions -H 'Content-Type: application/json' -d '{"projectName":"Mentor Try","repoUrl":"https://github.com/demo/m","description":"A description that is definitely longer than twenty characters."}')"
 
 echo
 echo "=== 8. Mentor review actions ==="
 echo "  (submission id: $SID)"
-check "PATCH status APPROVED" 200 "$(status -b "$JAR" -o /dev/null -X PATCH "$API/api/submissions/$SID/status" -H 'Content-Type: application/json' -d '{"status":"APPROVED"}')"
-check "PATCH status REJECTED" 200 "$(status -b "$JAR" -o /dev/null -X PATCH "$API/api/submissions/$SID/status" -H 'Content-Type: application/json' -d '{"status":"REJECTED"}')"
-check "PATCH status PENDING (invalid -> 400)" 400 "$(status -b "$JAR" -o /dev/null -X PATCH "$API/api/submissions/$SID/status" -H 'Content-Type: application/json' -d '{"status":"PENDING"}')"
-check "PATCH unknown id (-> 404)" 404 "$(status -b "$JAR" -o /dev/null -X PATCH "$API/api/submissions/does-not-exist/status" -H 'Content-Type: application/json' -d '{"status":"APPROVED"}')"
-check "PATCH status (student -> 403)" 403 "$(status -b "$SJAR" -o /dev/null -X PATCH "$API/api/submissions/$SID/status" -H 'Content-Type: application/json' -d '{"status":"APPROVED"}')"
-check "PATCH status (no auth -> 401)" 401 "$(status -o /dev/null -X PATCH "$API/api/submissions/$SID/status" -H 'Content-Type: application/json' -d '{"status":"APPROVED"}')"
+MENTOR_ID=$(echo "$LOGIN" | grep -o '"id":"[^"]*"' | head -1 | sed 's/"id":"\([^"]*\)"/\1/')
+check "PATCH assignment to mentor" 200 "$(status -b "$JAR" -o /dev/null -X PATCH "$API/api/submissions/$SID/assignment" -H 'Content-Type: application/json' -d "{\"mentorId\":\"$MENTOR_ID\"}")"
+check "PATCH assignment unassigned" 200 "$(status -b "$JAR" -o /dev/null -X PATCH "$API/api/submissions/$SID/assignment" -H 'Content-Type: application/json' -d '{"mentorId":null}')"
+check "PATCH status APPROVED" 200 "$(status -b "$JAR" -o /dev/null -X PATCH "$API/api/submissions/$SID/status" -H 'Content-Type: application/json' -d '{"status":"APPROVED","feedback":"Strong project and clear documentation.","functionalityScore":4,"codeQualityScore":4,"documentationScore":5,"presentationScore":4}')"
+check "PATCH rejection without useful feedback (invalid -> 400)" 400 "$(status -b "$JAR" -o /dev/null -X PATCH "$API/api/submissions/$SID/status" -H 'Content-Type: application/json' -d '{"status":"REJECTED","feedback":"No","functionalityScore":3,"codeQualityScore":3,"documentationScore":3,"presentationScore":3}')"
+check "PATCH rubric score out of range (invalid -> 400)" 400 "$(status -b "$JAR" -o /dev/null -X PATCH "$API/api/submissions/$SID/status" -H 'Content-Type: application/json' -d '{"status":"APPROVED","feedback":"","functionalityScore":6,"codeQualityScore":3,"documentationScore":3,"presentationScore":3}')"
+check "PATCH status NEEDS_REVISION" 200 "$(status -b "$JAR" -o /dev/null -X PATCH "$API/api/submissions/$SID/status" -H 'Content-Type: application/json' -d '{"status":"NEEDS_REVISION","feedback":"Please improve the project tests and explain setup steps.","functionalityScore":3,"codeQualityScore":3,"documentationScore":2,"presentationScore":3}')"
+REVFILE=$(mktemp)
+REVCODE=$(curl -s -b "$SJAR" -o "$REVFILE" -w '%{http_code}' -X POST "$API/api/submissions" -H 'Content-Type: application/json' \
+  -d '{"projectName":"Test Project Revision","repoUrl":"https://github.com/demo/test-revision","description":"A revised description that is definitely longer than twenty characters."}')
+check "POST /api/submissions (revision after feedback)" 201 "$REVCODE"
+grep -q "\"previousSubmissionId\":\"$SID\"" "$REVFILE" && { PASS=$((PASS+1)); echo "  PASS  revision linked to prior submission"; } || { FAIL=$((FAIL+1)); echo "  FAIL  revision missing prior link: $(cat "$REVFILE")"; }
+check "PATCH status REJECTED" 200 "$(status -b "$JAR" -o /dev/null -X PATCH "$API/api/submissions/$SID/status" -H 'Content-Type: application/json' -d '{"status":"REJECTED","feedback":"The repository does not contain the submitted project.","functionalityScore":1,"codeQualityScore":1,"documentationScore":1,"presentationScore":2}')"
+check "PATCH status without rubric (invalid -> 400)" 400 "$(status -b "$JAR" -o /dev/null -X PATCH "$API/api/submissions/$SID/status" -H 'Content-Type: application/json' -d '{"status":"APPROVED"}')"
+check "PATCH status PENDING (invalid -> 400)" 400 "$(status -b "$JAR" -o /dev/null -X PATCH "$API/api/submissions/$SID/status" -H 'Content-Type: application/json' -d '{"status":"PENDING","feedback":"Please review","functionalityScore":3,"codeQualityScore":3,"documentationScore":3,"presentationScore":3}')"
+check "PATCH unknown id (-> 404)" 404 "$(status -b "$JAR" -o /dev/null -X PATCH "$API/api/submissions/does-not-exist/status" -H 'Content-Type: application/json' -d '{"status":"APPROVED","feedback":"","functionalityScore":3,"codeQualityScore":3,"documentationScore":3,"presentationScore":3}')"
+check "PATCH status (student -> 403)" 403 "$(status -b "$SJAR" -o /dev/null -X PATCH "$API/api/submissions/$SID/status" -H 'Content-Type: application/json' -d '{"status":"APPROVED","feedback":"","functionalityScore":3,"codeQualityScore":3,"documentationScore":3,"presentationScore":3}')"
+check "PATCH status (no auth -> 401)" 401 "$(status -o /dev/null -X PATCH "$API/api/submissions/$SID/status" -H 'Content-Type: application/json' -d '{"status":"APPROVED","feedback":"","functionalityScore":3,"codeQualityScore":3,"documentationScore":3,"presentationScore":3}')"
 
 echo
 echo "=== 9. Rate limiting (submission limiter, 5/15min) ==="

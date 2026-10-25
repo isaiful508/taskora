@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { CheckCircle2, Clock, Inbox, XCircle } from "lucide-react";
+import { CheckCircle2, Clock, Inbox, RotateCcw, XCircle } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -37,6 +37,13 @@ const STAT_CARDS = [
     className: "text-red-600 dark:text-red-400",
     ringClass: "ring-red-500/20",
   },
+  {
+    key: "needsRevision",
+    label: "Needs revision",
+    icon: RotateCcw,
+    className: "text-blue-600 dark:text-blue-400",
+    ringClass: "ring-blue-500/20",
+  },
 ] as const;
 
 export function StatsCards() {
@@ -60,7 +67,7 @@ export function StatsCards() {
           </AlertDescription>
         </Alert>
       ) : null}
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         {STAT_CARDS.map((card) => {
           const Icon = card.icon;
           return (

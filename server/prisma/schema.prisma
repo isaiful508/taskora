@@ -16,30 +16,44 @@ enum SubmissionStatus {
   PENDING
   APPROVED
   REJECTED
+  NEEDS_REVISION
 }
 
 model User {
-  id           String       @id @default(cuid())
-  name         String
-  email        String       @unique
-  passwordHash String
-  role         Role         @default(STUDENT)
-  createdAt    DateTime     @default(now())
-  submissions  Submission[]
+  id                  String       @id @default(cuid())
+  name                String
+  email               String       @unique
+  passwordHash        String
+  role                Role         @default(STUDENT)
+  createdAt           DateTime     @default(now())
+  submissions         Submission[]
+  assignedSubmissions Submission[] @relation("MentorAssignments")
 }
 
 model Submission {
-  id          String           @id @default(cuid())
-  studentId   String
-  student     User             @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  projectName String
-  repoUrl     String
-  liveUrl     String?
-  description String
-  status      SubmissionStatus @default(PENDING)
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
+  id                   String           @id @default(cuid())
+  studentId            String
+  student              User             @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  projectName          String
+  repoUrl              String
+  liveUrl              String?
+  description          String
+  status               SubmissionStatus @default(PENDING)
+  reviewFeedback       String?
+  functionalityScore   Int?
+  codeQualityScore     Int?
+  documentationScore   Int?
+  presentationScore    Int?
+  isLate               Boolean          @default(false)
+  assignedMentorId     String?
+  assignedMentor       User?            @relation("MentorAssignments", fields: [assignedMentorId], references: [id], onDelete: SetNull)
+  previousSubmissionId String?          @unique
+  previousSubmission   Submission?      @relation("SubmissionRevisions", fields: [previousSubmissionId], references: [id], onDelete: SetNull)
+  revisedSubmission    Submission?      @relation("SubmissionRevisions")
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
 
   @@index([status, createdAt])
   @@index([studentId, status])
+  @@index([assignedMentorId, status])
 }

@@ -20,18 +20,37 @@ export const createSubmissionSchema = z.object({
 });
 
 export const updateStatusSchema = z.object({
-  status: z.enum(["APPROVED", "REJECTED"], {
-    error: "Status must be APPROVED or REJECTED",
+  status: z.enum(["APPROVED", "REJECTED", "NEEDS_REVISION"], {
+    error: "Status must be APPROVED, REJECTED, or NEEDS_REVISION",
   }),
+  feedback: z.string().trim().max(2000).optional().or(z.literal("")),
+  functionalityScore: z.number().int().min(1).max(5),
+  codeQualityScore: z.number().int().min(1).max(5),
+  documentationScore: z.number().int().min(1).max(5),
+  presentationScore: z.number().int().min(1).max(5),
+}).superRefine((value, ctx) => {
+  if (value.status !== "APPROVED" && (value.feedback?.trim().length ?? 0) < 10) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["feedback"],
+      message: "Provide at least 10 characters of feedback for this decision",
+    });
+  }
+});
+
+export const assignmentSchema = z.object({
+  mentorId: z.string().cuid().nullable(),
 });
 
 export const listQuerySchema = z.object({
-  status: z.enum(["PENDING", "APPROVED", "REJECTED"]).optional(),
+  status: z.enum(["PENDING", "APPROVED", "REJECTED", "NEEDS_REVISION"]).optional(),
   search: z.string().trim().max(100).optional(),
   sort: z.enum(["newest", "oldest", "name"]).default("newest"),
+  assigned: z.enum(["all", "mine", "unassigned"]).default("all"),
   page: z.coerce.number().int().positive().default(1),
   limit: z.coerce.number().int().positive().max(50).default(10),
 });
 
 export type CreateSubmissionInput = z.infer<typeof createSubmissionSchema>;
 export type ListQuery = z.infer<typeof listQuerySchema>;
+export type UpdateStatusInput = z.infer<typeof updateStatusSchema>;

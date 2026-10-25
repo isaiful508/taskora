@@ -53,6 +53,24 @@ export const loginFormSchema = z.object({
   password: z.string().min(1, "Password is required"),
 });
 
+export const reviewFormSchema = z.object({
+  status: z.enum(["APPROVED", "REJECTED", "NEEDS_REVISION"]),
+  feedback: z.string().trim().max(2000),
+  functionalityScore: z.number().int().min(1).max(5),
+  codeQualityScore: z.number().int().min(1).max(5),
+  documentationScore: z.number().int().min(1).max(5),
+  presentationScore: z.number().int().min(1).max(5),
+}).superRefine((value, ctx) => {
+  if (value.status !== "APPROVED" && value.feedback.length < 10) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["feedback"],
+      message: "Add at least 10 characters of feedback before rejecting or requesting a revision.",
+    });
+  }
+});
+
 export type SubmissionFormValues = z.infer<typeof submissionFormSchema>;
 export type SignupFormValues = z.infer<typeof signupFormSchema>;
 export type LoginFormValues = z.infer<typeof loginFormSchema>;
+export type ReviewFormValues = z.infer<typeof reviewFormSchema>;

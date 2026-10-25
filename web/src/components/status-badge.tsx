@@ -1,5 +1,5 @@
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle2, Clock, XCircle } from "lucide-react";
+import { CheckCircle2, Clock, RotateCcw, XCircle } from "lucide-react";
 import type { SubmissionStatus } from "@/lib/types";
 
 const STATUS_META: Record<
@@ -20,6 +20,11 @@ const STATUS_META: Record<
     label: "Rejected",
     icon: XCircle,
     className: "bg-red-100 text-red-800 ring-1 ring-inset ring-red-200 dark:bg-red-500/15 dark:text-red-300 dark:ring-red-500/30",
+  },
+  NEEDS_REVISION: {
+    label: "Needs revision",
+    icon: RotateCcw,
+    className: "bg-blue-100 text-blue-800 ring-1 ring-inset ring-blue-200 dark:bg-blue-500/15 dark:text-blue-300 dark:ring-blue-500/30",
   },
 };
 

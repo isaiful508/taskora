@@ -8,6 +8,8 @@ const envSchema = z.object({
   JWT_EXPIRES_IN: z.string().default("7d"),
   CORS_ORIGIN: z.string().url().default("http://localhost:3000"),
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
+  SUBMISSION_DEADLINE: z.iso.datetime({ offset: true }).optional(),
+  ALLOW_LATE_SUBMISSIONS: z.enum(["true", "false"]).default("true").transform((value) => value === "true"),
 });
 
 const parsed = envSchema.safeParse(process.env);
