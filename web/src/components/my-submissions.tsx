@@ -2,11 +2,14 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { ExternalLink, FolderGit2, Globe } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { StatusBadge } from "@/components/status-badge";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api } from "@/lib/api";
+import type { Submission } from "@/lib/types";
 
 function formatDate(value: string) {
   return new Date(value).toLocaleDateString(undefined, {
@@ -16,11 +19,43 @@ function formatDate(value: string) {
   });
 }
 
-export function MySubmissions() {
+export function MySubmissions({
+  hasPendingSubmission,
+  onResubmit,
+}: {
+  hasPendingSubmission: boolean;
+  onResubmit: (submission: Submission) => void;
+}) {
+  const historyListRef = useRef<HTMLDivElement>(null);
+  const [historyMaxHeight, setHistoryMaxHeight] = useState<number | null>(null);
   const { data, isPending, isError } = useQuery({
     queryKey: ["my-submissions"],
     queryFn: api.submissions.mine,
   });
+  const submissions = data?.submissions;
+
+  useEffect(() => {
+    const list = historyListRef.current;
+    if (!list || !submissions || submissions.length <= 3) {
+      setHistoryMaxHeight(null);
+      return;
+    }
+
+    const updateMaxHeight = () => {
+      const cards = Array.from(list.children).slice(0, 3);
+      const gap = Number.parseFloat(getComputedStyle(list).rowGap) || 0;
+      const height = cards.reduce((total, card) => total + card.getBoundingClientRect().height, 0);
+      setHistoryMaxHeight(height + gap * (cards.length - 1));
+    };
+
+    updateMaxHeight();
+    const observer = new ResizeObserver(updateMaxHeight);
+    Array.from(list.children)
+      .slice(0, 3)
+      .forEach((card) => observer.observe(card));
+
+    return () => observer.disconnect();
+  }, [submissions]);
 
   return (
     <Card>
@@ -41,11 +76,20 @@ export function MySubmissions() {
             You haven&apos;t submitted anything yet. Your first submission will show up here.
           </p>
         ) : (
-          data.submissions.map((submission) => (
-            <article
-              key={submission.id}
-              className="rounded-lg border p-4 text-sm transition-colors hover:bg-muted/40"
-            >
+          <div
+            ref={historyListRef}
+            className="space-y-4 overflow-y-auto pr-2"
+            style={
+              data.submissions.length > 3 && historyMaxHeight !== null
+                ? { maxHeight: historyMaxHeight }
+                : undefined
+            }
+          >
+            {data.submissions.map((submission) => (
+              <article
+                key={submission.id}
+                className="rounded-lg border p-4 text-sm transition-colors hover:bg-muted/40"
+              >
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <h3 className="font-medium leading-tight">{submission.projectName}</h3>
                 <div className="flex flex-wrap gap-2">
@@ -78,6 +122,23 @@ export function MySubmissions() {
                   ) : null}
                 </div>
               ) : null}
+              {submission.status === "NEEDS_REVISION" &&
+              !data.submissions.some((candidate) => candidate.previousSubmissionId === submission.id) ? (
+                <div className="mt-3 flex flex-wrap items-center gap-3">
+                  <Button
+                    size="sm"
+                    onClick={() => onResubmit(submission)}
+                    disabled={hasPendingSubmission}
+                  >
+                    Update and resubmit
+                  </Button>
+                  {hasPendingSubmission ? (
+                    <span className="text-xs text-muted-foreground">
+                      Resubmission is unavailable while another project is pending review.
+                    </span>
+                  ) : null}
+                </div>
+              ) : null}
 
               <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted-foreground">
                 <span>Submitted {formatDate(submission.createdAt)}</span>
@@ -104,8 +165,9 @@ export function MySubmissions() {
                   </a>
                 ) : null}
               </div>
-            </article>
-          ))
+              </article>
+            ))}
+          </div>
         )}
       </CardContent>
     </Card>

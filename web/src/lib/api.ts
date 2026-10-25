@@ -81,6 +81,7 @@ export const api = {
       repoUrl: string;
       liveUrl?: string;
       description: string;
+      previousSubmissionId?: string;
     }) => request<{ submission: Submission }>("/submissions", { method: "POST", body: input }),
     mine: () => request<{ submissions: Submission[] }>("/submissions/mine"),
     list: (filters: SubmissionFilters) =>

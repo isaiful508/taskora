@@ -254,12 +254,11 @@ Key implementation details:
 
 The brief left a few things open; these are the interpretations that were implemented.
 
-1. **One active submission per student.** A student may have many submissions over time, but at most
-   one `PENDING` or `APPROVED` one at a time — a rejected submission frees the slot. This is enforced
-   in the database by a partial unique index
-   (`Submission_studentId_active_key` on `studentId` where `status IN ('PENDING','APPROVED')`), so
-   concurrent requests cannot both win. The API returns `409` with a friendly message, and the UI
-   locks the form and shows *"Submission limit reached"*.
+1. **One pending submission per student.** A student may submit another project after a mentor
+   approves or rejects the previous one. This is enforced in the database by a partial unique index
+   (`Submission_studentId_active_key` on `studentId` where `status = 'PENDING'`), so concurrent
+   requests cannot both win. A revision request can be resubmitted from its history card when the
+   student has no other submission pending review.
 2. **Only mentors can review submissions or manage assignments**, and only mentors can list all
    submissions or read the stats.
    Students can only ever read their own submissions (`GET /api/submissions/mine`).

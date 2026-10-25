@@ -35,27 +35,28 @@ export async function createSubmission(studentId: string, input: CreateSubmissio
   const active = await prisma.submission.findFirst({
     where: {
       studentId,
-      status: { in: ["PENDING", "APPROVED"] },
+      status: "PENDING",
     },
   });
 
   if (active) {
-    throw ApiError.conflict(
-      active.status === "APPROVED"
-        ? "You already have an approved submission"
-        : "You already have a pending submission. Please wait for a mentor to review it.",
-    );
+    throw ApiError.conflict("You already have a pending submission. Please wait for a mentor to review it.");
   }
 
-  const revision = await prisma.submission.findFirst({
-    where: {
-      studentId,
-      status: "NEEDS_REVISION",
-      revisedSubmission: null,
-    },
-    orderBy: { createdAt: "desc" },
-    select: { id: true },
-  });
+  if (input.previousSubmissionId) {
+    const revision = await prisma.submission.findFirst({
+      where: {
+        id: input.previousSubmissionId,
+        studentId,
+        status: "NEEDS_REVISION",
+        revisedSubmission: null,
+      },
+      select: { id: true },
+    });
+    if (!revision) {
+      throw ApiError.conflict("This revision request is no longer available for resubmission");
+    }
+  }
 
   try {
     return await prisma.submission.create({
@@ -66,13 +67,13 @@ export async function createSubmission(studentId: string, input: CreateSubmissio
         liveUrl: input.liveUrl || null,
         description: input.description,
         isLate: Boolean(deadline && now > deadline),
-        ...(revision ? { previousSubmissionId: revision.id } : {}),
+        ...(input.previousSubmissionId ? { previousSubmissionId: input.previousSubmissionId } : {}),
       },
       include: submissionRelations,
     });
   } catch (err) {
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
-      throw ApiError.conflict("You already have an active submission or this revision was submitted");
+      throw ApiError.conflict("You already have a pending submission or this revision was submitted");
     }
     throw err;
   }

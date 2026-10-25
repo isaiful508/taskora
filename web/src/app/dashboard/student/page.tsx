@@ -5,19 +5,20 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { BadgeCheck, Clock3, Layers3, Sparkles } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
 import { FullPageLoader } from "@/components/full-page-loader";
 import { MySubmissions } from "@/components/my-submissions";
 import { SubmissionForm } from "@/components/submission-form";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth-provider";
+import type { Submission } from "@/lib/types";
 
 export default function StudentDashboardPage() {
   const { user, status } = useAuth();
   const router = useRouter();
   const [now, setNow] = useState<number | null>(null);
+  const [revisionToResubmitId, setRevisionToResubmitId] = useState<string | null>(null);
 
-  const { data, isPending } = useQuery({
+  const { data, isPending, isError: submissionsError } = useQuery({
     queryKey: ["my-submissions"],
     queryFn: api.submissions.mine,
     enabled: status === "authenticated",
@@ -51,19 +52,22 @@ export default function StudentDashboardPage() {
   }
 
   const submissions = data?.submissions ?? [];
-  const active = submissions.find((s) => s.status === "PENDING" || s.status === "APPROVED");
+  const pendingSubmission = submissions.find((submission) => submission.status === "PENDING");
   const revisionRequested = submissions.find(
     (submission) =>
+      submission.id === revisionToResubmitId &&
       submission.status === "NEEDS_REVISION" &&
       !submissions.some((candidate) => candidate.previousSubmissionId === submission.id),
   );
   const deadline = submissionConfig?.deadline ? new Date(submissionConfig.deadline) : null;
   const deadlinePassed = deadline !== null && now !== null && now > deadline.getTime();
 
-  const lockedReason = active
-    ? active.status === "PENDING"
-      ? "You already have a project awaiting review. You can submit a new one once it is approved or rejected."
-      : "One of your projects was approved, so no further submissions are needed."
+  const lockedReason = pendingSubmission
+    ? "You already have a project awaiting review. You can submit or resubmit another project once a mentor has reviewed it."
+    : isPending
+      ? "Checking your existing submissions before enabling a new one."
+      : submissionsError
+        ? "Your submission history could not be loaded. Retry loading it before submitting another project."
     : deadlinePassed && !submissionConfig?.allowLateSubmissions
       ? "The submission deadline has passed. New submissions are closed."
       : null;
@@ -138,28 +142,6 @@ export default function StudentDashboardPage() {
         </Alert>
       ) : null}
 
-      {revisionRequested ? (
-        <Alert>
-          <AlertTitle>Revision requested — update and resubmit</AlertTitle>
-          <AlertDescription className="flex flex-wrap items-center justify-between gap-3">
-            <span>
-              A mentor left feedback on “{revisionRequested.projectName}”. The project details are
-              prefilled below; edit the fields you changed and resubmit.
-            </span>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() =>
-                document.getElementById("submission-form")?.scrollIntoView({ behavior: "smooth" })
-              }
-            >
-              Update and resubmit
-            </Button>
-          </AlertDescription>
-        </Alert>
-      ) : null}
-
       <div className="grid gap-6 lg:grid-cols-5">
         <div className="lg:col-span-3">
           <SubmissionForm lockedReason={lockedReason} revision={revisionRequested} />
@@ -168,7 +150,13 @@ export default function StudentDashboardPage() {
           {isPending ? (
             <FullPageLoader label="Loading submissions" />
           ) : (
-            <MySubmissions />
+            <MySubmissions
+              hasPendingSubmission={Boolean(pendingSubmission)}
+              onResubmit={(submission: Submission) => {
+                setRevisionToResubmitId(submission.id);
+                document.getElementById("submission-form")?.scrollIntoView({ behavior: "smooth" });
+              }}
+            />
           )}
         </div>
       </div>

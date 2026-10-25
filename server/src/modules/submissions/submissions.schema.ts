@@ -12,6 +12,7 @@ export const createSubmissionSchema = z.object({
   projectName: z.string().trim().min(3, "Project name must be at least 3 characters").max(100),
   repoUrl: httpUrl.max(500),
   liveUrl: httpUrl.max(500).optional().or(z.literal("").transform(() => undefined)),
+  previousSubmissionId: z.string().cuid().optional(),
   description: z
     .string()
     .trim()

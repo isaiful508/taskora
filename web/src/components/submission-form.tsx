@@ -54,9 +54,7 @@ export function SubmissionForm({ lockedReason = null, revision = null }: Submiss
           ? "Your updated project has been sent to the mentor for another review."
           : "A mentor will review it shortly.",
       });
-      if (!revision) {
-        reset({ projectName: "", repoUrl: "", liveUrl: "", description: "" });
-      }
+      reset({ projectName: "", repoUrl: "", liveUrl: "", description: "" });
       void queryClient.invalidateQueries({ queryKey: ["my-submissions"] });
       void queryClient.invalidateQueries({ queryKey: ["stats"] });
     },
@@ -82,7 +80,11 @@ export function SubmissionForm({ lockedReason = null, revision = null }: Submiss
   });
 
   const onSubmit = (values: SubmissionFormValues) =>
-    mutation.mutate({ ...values, liveUrl: values.liveUrl || undefined });
+    mutation.mutate({
+      ...values,
+      liveUrl: values.liveUrl || undefined,
+      ...(revision ? { previousSubmissionId: revision.id } : {}),
+    });
   const isLocked = Boolean(lockedReason);
 
   return (
