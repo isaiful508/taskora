@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "start": "tsx src/index.ts",
-    "build": "npm run typecheck",
+    "build": "prisma generate && npm run typecheck",
     "typecheck": "tsc --noEmit",
     "db:migrate": "prisma migrate deploy && prisma generate",
     "db:migrate:dev": "prisma migrate dev",

@@ -304,6 +304,36 @@ cd server && npm run typecheck
 cd web && npm run lint && npx tsc --noEmit
 ```
 
+## Deploying the API to Vercel
+
+The API has a Vercel serverless entry point at `server/api/[...path].ts`. Create a separate Vercel
+project for this repository and set its **Root Directory** to `server`. Vercel will build the
+catch-all function, which serves the existing `/api/*` Express routes.
+
+Set these project environment variables for each environment you deploy:
+
+- `DATABASE_URL` — PostgreSQL connection string. For a serverless deployment, use your provider's
+  pooled connection string when available.
+- `DIRECT_URL` — optional direct PostgreSQL connection string for Prisma migrations. If omitted,
+  migrations use `DATABASE_URL`.
+- `JWT_SECRET` — long, randomly generated secret.
+- `JWT_EXPIRES_IN` — for example, `7d`.
+- `CORS_ORIGIN` — the exact frontend origin, including `https://` and without a trailing slash.
+- `NODE_ENV` — `production` for production deployments.
+
+The server build runs `prisma generate` and TypeScript checks. Apply schema migrations separately
+from a trusted machine with the production database environment configured:
+
+```bash
+npm run db:migrate --prefix server
+```
+
+This runs `prisma migrate deploy`; it does not seed or reset data. Do not run the demo seed against a
+database containing data you need to keep. After deployment, check
+`https://<your-vercel-api-domain>/api/health` and set the frontend's `NEXT_PUBLIC_API_URL` to the
+API's HTTPS origin. Verify cookie-based login in the deployed browser; separate Vercel project
+domains may require a same-origin proxy or custom domain arrangement for reliable authentication.
+
 ## Testing
 
 `scripts/api-tests.sh` is a dependency-free (bash + curl) API test suite covering health, the auth
