@@ -192,6 +192,7 @@ All endpoints are prefixed with `/api`. Authentication uses a `token` httpOnly c
 | GET    | `/api/auth/me`              | student or mentor | Current session user |
 | POST   | `/api/submissions`          | student | Create a submission (validated, rate limited) |
 | GET    | `/api/submissions/mine`     | student | The signed-in student's submissions |
+| DELETE | `/api/submissions/:id`      | student | Delete one of the signed-in student's submissions |
 | GET    | `/api/submissions`          | mentor  | List submissions — status, search, assignment filter, sort, page, limit |
 | GET    | `/api/submissions/stats`    | mentor  | Submission counters by status |
 | GET    | `/api/submissions/mentors`  | mentor  | Mentor list with assigned and pending workload counts |
@@ -254,11 +255,13 @@ Key implementation details:
 
 The brief left a few things open; these are the interpretations that were implemented.
 
-1. **One pending submission per student.** A student may submit another project after a mentor
+1. **One pending submission per student, with duplicate project details blocked.** A student may submit another project after a mentor
    approves or rejects the previous one. This is enforced in the database by a partial unique index
    (`Submission_studentId_active_key` on `studentId` where `status = 'PENDING'`), so concurrent
-   requests cannot both win. A revision request can be resubmitted from its history card when the
-   student has no other submission pending review.
+   requests cannot both win. Project names, repository links and non-empty live links cannot be
+   reused by the same student; duplicate fields are highlighted with a clear error. A revision request
+   can retain its original details and be resubmitted from its history card when the student has no
+   other submission pending review.
 2. **Only mentors can review submissions or manage assignments**, and only mentors can list all
    submissions or read the stats.
    Students can only ever read their own submissions (`GET /api/submissions/mine`).
@@ -306,7 +309,7 @@ cd web && npm run lint && npx tsc --noEmit
 `scripts/api-tests.sh` is a dependency-free (bash + curl) API test suite covering health, the auth
 guards, status/search/sort/assignment filters and pagination, mentor workload, signup validation,
 student/mentor RBAC, submission creation and duplicate prevention, rubric reviews, revision linking,
-assignment, error codes and rate limiting.
+assignment, owner-only deletion and error codes and rate limiting.
 
 ```bash
 npm run dev --prefix server      # the API must be running

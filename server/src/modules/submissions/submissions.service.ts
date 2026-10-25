@@ -43,19 +43,90 @@ export async function createSubmission(studentId: string, input: CreateSubmissio
     throw ApiError.conflict("You already have a pending submission. Please wait for a mentor to review it.");
   }
 
+  const existingSubmissions = await prisma.submission.findMany({
+    where: { studentId },
+    select: {
+      id: true,
+      projectName: true,
+      repoUrl: true,
+      liveUrl: true,
+      previousSubmissionId: true,
+      status: true,
+    },
+  });
+  const submissionsById = new Map(
+    existingSubmissions.map((submission) => [submission.id, submission]),
+  );
+  const revisionLineage = new Set<string>();
+
   if (input.previousSubmissionId) {
-    const revision = await prisma.submission.findFirst({
-      where: {
-        id: input.previousSubmissionId,
-        studentId,
-        status: "NEEDS_REVISION",
-        revisedSubmission: null,
-      },
-      select: { id: true },
-    });
-    if (!revision) {
+    const revision = submissionsById.get(input.previousSubmissionId);
+    const hasAlreadyBeenRevised = existingSubmissions.some(
+      (submission) => submission.previousSubmissionId === input.previousSubmissionId,
+    );
+    if (!revision || revision.status !== "NEEDS_REVISION" || hasAlreadyBeenRevised) {
       throw ApiError.conflict("This revision request is no longer available for resubmission");
     }
+
+    let current: typeof revision | undefined = revision;
+    while (current && !revisionLineage.has(current.id)) {
+      revisionLineage.add(current.id);
+      current = current.previousSubmissionId
+        ? submissionsById.get(current.previousSubmissionId)
+        : undefined;
+    }
+  }
+
+  const normalizeProjectName = (value: string) => value.trim().replace(/\s+/g, " ").toLowerCase();
+  const normalizeUrl = (value: string, repository = false) => {
+    const url = new URL(value);
+    let path = url.pathname.replace(/\/+$/, "");
+    if (repository) {
+      path = path.replace(/\.git$/i, "").toLowerCase();
+    }
+    return `${url.protocol}//${url.hostname}${url.port ? `:${url.port}` : ""}${path}`;
+  };
+  const candidates = existingSubmissions.filter(
+    (submission) => !revisionLineage.has(submission.id),
+  );
+  const duplicateErrors: Record<string, string[]> = {};
+  const submittedLiveUrl = input.liveUrl ? normalizeUrl(input.liveUrl) : null;
+
+  if (
+    candidates.some(
+      (submission) =>
+        normalizeProjectName(submission.projectName) === normalizeProjectName(input.projectName),
+    )
+  ) {
+    duplicateErrors.projectName = [
+      "You have already submitted a project with this name. Use that project's revision action to update it.",
+    ];
+  }
+  if (
+    candidates.some(
+      (submission) => normalizeUrl(submission.repoUrl, true) === normalizeUrl(input.repoUrl, true),
+    )
+  ) {
+    duplicateErrors.repoUrl = [
+      "This repository has already been submitted. Use the existing project's revision action instead of creating a duplicate.",
+    ];
+  }
+  if (
+    submittedLiveUrl &&
+    candidates.some(
+      (submission) =>
+        submission.liveUrl && normalizeUrl(submission.liveUrl) === submittedLiveUrl,
+    )
+  ) {
+    duplicateErrors.liveUrl = [
+      "This live link has already been submitted for another project.",
+    ];
+  }
+  if (Object.keys(duplicateErrors).length > 0) {
+    throw ApiError.conflict(
+      "This submission matches a project already in your history. Review the highlighted fields, or use the existing project's revision action.",
+      duplicateErrors,
+    );
   }
 
   try {
@@ -98,6 +169,16 @@ export async function getMySubmissions(studentId: string) {
     },
     orderBy: { createdAt: "desc" },
   });
+}
+
+export async function deleteMySubmission(studentId: string, submissionId: string) {
+  const result = await prisma.submission.deleteMany({
+    where: { id: submissionId, studentId },
+  });
+
+  if (result.count === 0) {
+    throw ApiError.notFound("Submission not found");
+  }
 }
 
 export async function listSubmissions(query: ListQuery, mentorId: string) {

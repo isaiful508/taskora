@@ -43,6 +43,8 @@ export function SubmissionForm({ lockedReason = null, revision = null }: Submiss
         liveUrl: revision.liveUrl ?? "",
         description: revision.description,
       });
+    } else {
+      reset({ projectName: "", repoUrl: "", liveUrl: "", description: "" });
     }
   }, [revision, reset]);
 

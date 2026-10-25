@@ -46,6 +46,16 @@ submissionsRouter.get("/mine", requireRole("STUDENT"), async (req, res, next) =>
   }
 });
 
+submissionsRouter.delete("/:id", requireRole("STUDENT"), async (req, res, next) => {
+  try {
+    const { id } = req.params as { id: string };
+    await submissionsService.deleteMySubmission(req.user!.id, id);
+    res.status(204).end();
+  } catch (err) {
+    next(err);
+  }
+});
+
 submissionsRouter.get("/stats", requireRole("MENTOR"), async (_req, res, next) => {
   try {
     const stats = await submissionsService.getStats();

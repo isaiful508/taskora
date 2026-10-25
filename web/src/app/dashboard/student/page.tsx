@@ -156,6 +156,11 @@ export default function StudentDashboardPage() {
                 setRevisionToResubmitId(submission.id);
                 document.getElementById("submission-form")?.scrollIntoView({ behavior: "smooth" });
               }}
+              onDeleted={(submission: Submission) => {
+                if (revisionToResubmitId === submission.id) {
+                  setRevisionToResubmitId(null);
+                }
+              }}
             />
           )}
         </div>

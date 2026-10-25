@@ -134,17 +134,45 @@ MENTOR_ID=$(echo "$LOGIN" | grep -o '"id":"[^"]*"' | head -1 | sed 's/"id":"\([^
 check "PATCH assignment to mentor" 200 "$(status -b "$JAR" -o /dev/null -X PATCH "$API/api/submissions/$SID/assignment" -H 'Content-Type: application/json' -d "{\"mentorId\":\"$MENTOR_ID\"}")"
 check "PATCH assignment unassigned" 200 "$(status -b "$JAR" -o /dev/null -X PATCH "$API/api/submissions/$SID/assignment" -H 'Content-Type: application/json' -d '{"mentorId":null}')"
 check "PATCH status APPROVED" 200 "$(status -b "$JAR" -o /dev/null -X PATCH "$API/api/submissions/$SID/status" -H 'Content-Type: application/json' -d '{"status":"APPROVED","feedback":"Strong project and clear documentation.","functionalityScore":4,"codeQualityScore":4,"documentationScore":5,"presentationScore":4}')"
+NAME_DUP=$(body -b "$SJAR" -X POST "$API/api/submissions" -H 'Content-Type: application/json' \
+  -d '{"projectName":" test   project ","repoUrl":"https://github.com/demo/different-name","description":"A duplicate name description that is longer than twenty characters."}')
+check "POST duplicate project name -> 409" 409 "$(status -b "$SJAR" -o /dev/null -X POST "$API/api/submissions" -H 'Content-Type: application/json' \
+  -d '{"projectName":" test   project ","repoUrl":"https://github.com/demo/different-name","description":"A duplicate name description that is longer than twenty characters."}')"
+echo "$NAME_DUP" | grep -q '"projectName"' && { PASS=$((PASS+1)); echo "  PASS  duplicate name field error"; } || { FAIL=$((FAIL+1)); echo "  FAIL  duplicate name response: $NAME_DUP"; }
+REPO_DUP=$(body -b "$SJAR" -X POST "$API/api/submissions" -H 'Content-Type: application/json' \
+  -d '{"projectName":"Different project","repoUrl":"https://github.com/DEMO/TEST.git/","description":"A duplicate repository description longer than twenty characters."}')
+check "POST duplicate repository -> 409" 409 "$(status -b "$SJAR" -o /dev/null -X POST "$API/api/submissions" -H 'Content-Type: application/json' \
+  -d '{"projectName":"Different project","repoUrl":"https://github.com/DEMO/TEST.git/","description":"A duplicate repository description longer than twenty characters."}')"
+echo "$REPO_DUP" | grep -q '"repoUrl"' && { PASS=$((PASS+1)); echo "  PASS  duplicate repository field error"; } || { FAIL=$((FAIL+1)); echo "  FAIL  duplicate repository response: $REPO_DUP"; }
+LIVE_DUP=$(body -b "$SJAR" -X POST "$API/api/submissions" -H 'Content-Type: application/json' \
+  -d '{"projectName":"Different live project","repoUrl":"https://github.com/demo/different-live","liveUrl":"https://test.example.com/","description":"A duplicate live link description longer than twenty characters."}')
+check "POST duplicate live link -> 409" 409 "$(status -b "$SJAR" -o /dev/null -X POST "$API/api/submissions" -H 'Content-Type: application/json' \
+  -d '{"projectName":"Different live project","repoUrl":"https://github.com/demo/different-live","liveUrl":"https://test.example.com/","description":"A duplicate live link description longer than twenty characters."}')"
+echo "$LIVE_DUP" | grep -q '"liveUrl"' && { PASS=$((PASS+1)); echo "  PASS  duplicate live link field error"; } || { FAIL=$((FAIL+1)); echo "  FAIL  duplicate live link response: $LIVE_DUP"; }
 check "PATCH rejection without useful feedback (invalid -> 400)" 400 "$(status -b "$JAR" -o /dev/null -X PATCH "$API/api/submissions/$SID/status" -H 'Content-Type: application/json' -d '{"status":"REJECTED","feedback":"No","functionalityScore":3,"codeQualityScore":3,"documentationScore":3,"presentationScore":3}')"
 check "PATCH rubric score out of range (invalid -> 400)" 400 "$(status -b "$JAR" -o /dev/null -X PATCH "$API/api/submissions/$SID/status" -H 'Content-Type: application/json' -d '{"status":"APPROVED","feedback":"","functionalityScore":6,"codeQualityScore":3,"documentationScore":3,"presentationScore":3}')"
 check "PATCH status NEEDS_REVISION" 200 "$(status -b "$JAR" -o /dev/null -X PATCH "$API/api/submissions/$SID/status" -H 'Content-Type: application/json' -d '{"status":"NEEDS_REVISION","feedback":"Please improve the project tests and explain setup steps.","functionalityScore":3,"codeQualityScore":3,"documentationScore":2,"presentationScore":3}')"
 REVFILE=$(mktemp)
 REVCODE=$(curl -s -b "$SJAR" -o "$REVFILE" -w '%{http_code}' -X POST "$API/api/submissions" -H 'Content-Type: application/json' \
-  -d "{\"projectName\":\"Test Project Revision\",\"repoUrl\":\"https://github.com/demo/test-revision\",\"description\":\"A revised description that is definitely longer than twenty characters.\",\"previousSubmissionId\":\"$SID\"}")
+  -d "{\"projectName\":\"Test Project\",\"repoUrl\":\"https://github.com/demo/test\",\"liveUrl\":\"https://test.example.com\",\"description\":\"A revised description that is definitely longer than twenty characters.\",\"previousSubmissionId\":\"$SID\"}")
 check "POST /api/submissions (revision after feedback)" 201 "$REVCODE"
 grep -q "\"previousSubmissionId\":\"$SID\"" "$REVFILE" && { PASS=$((PASS+1)); echo "  PASS  revision linked to prior submission"; } || { FAIL=$((FAIL+1)); echo "  FAIL  revision missing prior link: $(cat "$REVFILE")"; }
 REVSID=$(grep -o '"id":"[^"]*"' "$REVFILE" | head -1 | sed 's/"id":"\([^"]*\)"/\1/')
 check "PATCH resubmitted project APPROVED" 200 "$(status -b "$JAR" -o /dev/null -X PATCH "$API/api/submissions/$REVSID/status" -H 'Content-Type: application/json' -d '{"status":"APPROVED","feedback":"The improvements address the review notes.","functionalityScore":4,"codeQualityScore":4,"documentationScore":4,"presentationScore":4}')"
-check "POST new project after approval" 201 "$(status -b "$SJAR" -o /dev/null -X POST "$API/api/submissions" -H 'Content-Type: application/json' -d '{"projectName":"Next Student Project","repoUrl":"https://github.com/demo/next-project","description":"A separate project description that is longer than twenty characters."}')"
+NEXT_FILE=$(mktemp)
+NEXT_CODE=$(curl -s -b "$SJAR" -o "$NEXT_FILE" -w '%{http_code}' -X POST "$API/api/submissions" -H 'Content-Type: application/json' \
+  -d '{"projectName":"Next Student Project","repoUrl":"https://github.com/demo/next-project","description":"A separate project description that is longer than twenty characters."}')
+check "POST new project after approval" 201 "$NEXT_CODE"
+NEXT_ID=$(grep -o '"id":"[^"]*"' "$NEXT_FILE" | head -1 | sed 's/"id":"\([^"]*\)"/\1/')
+check "DELETE another student's project (-> 403)" 403 "$(status -b "$JAR" -o /dev/null -X DELETE "$API/api/submissions/$NEXT_ID")"
+check "DELETE own submission" 204 "$(status -b "$SJAR" -o /dev/null -X DELETE "$API/api/submissions/$NEXT_ID")"
+check "DELETE already removed submission (-> 404)" 404 "$(status -b "$SJAR" -o /dev/null -X DELETE "$API/api/submissions/$NEXT_ID")"
+MINE_AFTER_DELETE=$(body -b "$SJAR" "$API/api/submissions/mine")
+if ! echo "$MINE_AFTER_DELETE" | grep -q "$NEXT_ID"; then
+  PASS=$((PASS+1)); echo "  PASS  deleted project removed from own history"
+else
+  FAIL=$((FAIL+1)); echo "  FAIL  deleted project still appears in history: $MINE_AFTER_DELETE"
+fi
 check "PATCH status REJECTED" 200 "$(status -b "$JAR" -o /dev/null -X PATCH "$API/api/submissions/$SID/status" -H 'Content-Type: application/json' -d '{"status":"REJECTED","feedback":"The repository does not contain the submitted project.","functionalityScore":1,"codeQualityScore":1,"documentationScore":1,"presentationScore":2}')"
 check "PATCH status without rubric (invalid -> 400)" 400 "$(status -b "$JAR" -o /dev/null -X PATCH "$API/api/submissions/$SID/status" -H 'Content-Type: application/json' -d '{"status":"APPROVED"}')"
 check "PATCH status PENDING (invalid -> 400)" 400 "$(status -b "$JAR" -o /dev/null -X PATCH "$API/api/submissions/$SID/status" -H 'Content-Type: application/json' -d '{"status":"PENDING","feedback":"Please review","functionalityScore":3,"codeQualityScore":3,"documentationScore":3,"presentationScore":3}')"

@@ -84,6 +84,8 @@ export const api = {
       previousSubmissionId?: string;
     }) => request<{ submission: Submission }>("/submissions", { method: "POST", body: input }),
     mine: () => request<{ submissions: Submission[] }>("/submissions/mine"),
+    delete: (id: string) =>
+      request<void>(`/submissions/${encodeURIComponent(id)}`, { method: "DELETE" }),
     list: (filters: SubmissionFilters) =>
       request<Paginated<Submission>>("/submissions", {
         query: {

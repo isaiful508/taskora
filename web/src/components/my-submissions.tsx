@@ -1,14 +1,25 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { ExternalLink, FolderGit2, Globe } from "lucide-react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { ExternalLink, FolderGit2, Globe, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 import { StatusBadge } from "@/components/status-badge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { api } from "@/lib/api";
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { api, ApiError } from "@/lib/api";
 import type { Submission } from "@/lib/types";
 
 function formatDate(value: string) {
@@ -22,17 +33,39 @@ function formatDate(value: string) {
 export function MySubmissions({
   hasPendingSubmission,
   onResubmit,
+  onDeleted,
 }: {
   hasPendingSubmission: boolean;
   onResubmit: (submission: Submission) => void;
+  onDeleted: (submission: Submission) => void;
 }) {
+  const queryClient = useQueryClient();
   const historyListRef = useRef<HTMLDivElement>(null);
   const [historyMaxHeight, setHistoryMaxHeight] = useState<number | null>(null);
+  const [submissionToDelete, setSubmissionToDelete] = useState<Submission | null>(null);
   const { data, isPending, isError } = useQuery({
     queryKey: ["my-submissions"],
     queryFn: api.submissions.mine,
   });
   const submissions = data?.submissions;
+  const deleteMutation = useMutation({
+    mutationFn: api.submissions.delete,
+    onSuccess: (_, submissionId) => {
+      const deletedSubmission = submissions?.find((submission) => submission.id === submissionId);
+      if (deletedSubmission) onDeleted(deletedSubmission);
+      setSubmissionToDelete(null);
+      toast.success("Project deleted");
+      void queryClient.invalidateQueries({ queryKey: ["my-submissions"] });
+      void queryClient.invalidateQueries({ queryKey: ["submissions"] });
+      void queryClient.invalidateQueries({ queryKey: ["stats"] });
+      void queryClient.invalidateQueries({ queryKey: ["mentor-workload"] });
+    },
+    onError: (error) => {
+      toast.error(
+        error instanceof ApiError ? error.message : "Could not delete this project. Please try again.",
+      );
+    },
+  });
 
   useEffect(() => {
     const list = historyListRef.current;
@@ -92,9 +125,19 @@ export function MySubmissions({
               >
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <h3 className="font-medium leading-tight">{submission.projectName}</h3>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <StatusBadge status={submission.status} />
                   {submission.isLate ? <Badge variant="destructive">Late</Badge> : null}
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    className="size-8 text-destructive hover:text-destructive"
+                    aria-label={`Delete ${submission.projectName}`}
+                    onClick={() => setSubmissionToDelete(submission)}
+                  >
+                    <Trash2 className="size-4" />
+                  </Button>
                 </div>
               </div>
 
@@ -170,6 +213,35 @@ export function MySubmissions({
           </div>
         )}
       </CardContent>
+      <AlertDialog
+        open={submissionToDelete !== null}
+        onOpenChange={(open) => {
+          if (!open && !deleteMutation.isPending) setSubmissionToDelete(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this project?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {submissionToDelete
+                ? `“${submissionToDelete.projectName}” will be permanently removed from your submission history. This cannot be undone.`
+                : null}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteMutation.isPending}>No, keep it</AlertDialogCancel>
+            <Button
+              variant="destructive"
+              disabled={deleteMutation.isPending}
+              onClick={() => {
+                if (submissionToDelete) deleteMutation.mutate(submissionToDelete.id);
+              }}
+            >
+              {deleteMutation.isPending ? "Deleting…" : "Yes, delete"}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 }
