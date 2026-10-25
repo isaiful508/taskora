@@ -1,7 +1,7 @@
 import type { NextFunction, Request, Response } from "express";
 import { ZodError } from "zod";
-import { Prisma } from "../../generated/prisma/client";
-import { ApiError } from "./error";
+import { Prisma } from "../../generated/prisma/client.js";
+import { ApiError } from "./error.js";
 
 export function notFoundHandler(_req: Request, res: Response) {
   res.status(404).json({ message: "Route not found" });

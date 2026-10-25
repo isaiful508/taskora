@@ -1,10 +1,10 @@
 import { Router } from "express";
-import { env } from "../../config/env";
-import { requireAuth } from "../../middleware/auth";
-import { authLimiter } from "../../middleware/rateLimit";
-import { validateBody } from "../../middleware/validate";
-import { loginSchema, signupSchema } from "./auth.schema";
-import * as authService from "./auth.service";
+import { env } from "../../config/env.js";
+import { requireAuth } from "../../middleware/auth.js";
+import { authLimiter } from "../../middleware/rateLimit.js";
+import { validateBody } from "../../middleware/validate.js";
+import { loginSchema, signupSchema } from "./auth.schema.js";
+import * as authService from "./auth.service.js";
 
 export const authRouter = Router();
 

@@ -1,12 +1,12 @@
-import { Prisma } from "../../../generated/prisma/client";
-import { env } from "../../config/env";
-import { prisma } from "../../lib/prisma";
-import { ApiError } from "../../middleware/error";
+import { Prisma } from "../../../generated/prisma/client.js";
+import { env } from "../../config/env.js";
+import { prisma } from "../../lib/prisma.js";
+import { ApiError } from "../../middleware/error.js";
 import {
   type CreateSubmissionInput,
   type ListQuery,
   type UpdateStatusInput,
-} from "./submissions.schema";
+} from "./submissions.schema.js";
 
 const studentSelect = {
   id: true,

@@ -2,10 +2,10 @@ import cookieParser from "cookie-parser";
 import cors from "cors";
 import express from "express";
 import helmet from "helmet";
-import { env } from "./config/env";
-import { errorHandler, notFoundHandler } from "./middleware/errorHandler";
-import { authRouter } from "./modules/auth/auth.routes";
-import { submissionsRouter } from "./modules/submissions/submissions.routes";
+import { env } from "./config/env.js";
+import { errorHandler, notFoundHandler } from "./middleware/errorHandler.js";
+import { authRouter } from "./modules/auth/auth.routes.js";
+import { submissionsRouter } from "./modules/submissions/submissions.routes.js";
 
 export function createApp() {
   const app = express();

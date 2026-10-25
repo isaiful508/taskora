@@ -1,7 +1,7 @@
 import type { NextFunction, Request, Response } from "express";
-import { verifyToken } from "../lib/jwt";
-import type { Role } from "../../generated/prisma/client";
-import { ApiError } from "./error";
+import { verifyToken } from "../lib/jwt.js";
+import type { Role } from "../../generated/prisma/client.js";
+import { ApiError } from "./error.js";
 
 export function requireAuth(req: Request, _res: Response, next: NextFunction) {
   const token = req.cookies?.token as string | undefined;

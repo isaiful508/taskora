@@ -1,15 +1,15 @@
 import { Router } from "express";
-import { env } from "../../config/env";
-import { requireAuth, requireRole } from "../../middleware/auth";
-import { submissionLimiter } from "../../middleware/rateLimit";
-import { validateBody } from "../../middleware/validate";
+import { env } from "../../config/env.js";
+import { requireAuth, requireRole } from "../../middleware/auth.js";
+import { submissionLimiter } from "../../middleware/rateLimit.js";
+import { validateBody } from "../../middleware/validate.js";
 import {
   assignmentSchema,
   createSubmissionSchema,
   listQuerySchema,
   updateStatusSchema,
-} from "./submissions.schema";
-import * as submissionsService from "./submissions.service";
+} from "./submissions.schema.js";
+import * as submissionsService from "./submissions.service.js";
 
 export const submissionsRouter = Router();
 

@@ -1,8 +1,8 @@
 import bcrypt from "bcryptjs";
-import { prisma } from "../../lib/prisma";
-import { signToken } from "../../lib/jwt";
-import { ApiError } from "../../middleware/error";
-import type { LoginInput, SignupInput } from "./auth.schema";
+import { prisma } from "../../lib/prisma.js";
+import { signToken } from "../../lib/jwt.js";
+import { ApiError } from "../../middleware/error.js";
+import type { LoginInput, SignupInput } from "./auth.schema.js";
 
 function sanitizeUser(user: { id: string; name: string; email: string; role: "STUDENT" | "MENTOR" }) {
   return { id: user.id, name: user.name, email: user.email, role: user.role };
